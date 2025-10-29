@@ -1,13 +1,18 @@
 const express = require('express');
 const cors = require('cors');
-const { OAuth2Client } = require('google-auth-library');
+const { google } = require('googleapis');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const client = new OAuth2Client(process.env.CLIENT_ID);
+// 🔐 Crea client OAuth2 con client_id, client_secret e redirect_uri
+const oauth2Client = new google.auth.OAuth2(
+  process.env.CLIENT_ID,
+  process.env.CLIENT_SECRET,
+  'https://google-auth-server-obi8.onrender.com/oauth2callback' // ← deve combaciare con Google Console
+);
 
 // 🌐 Endpoint per gestire il redirect da Google OAuth2
 app.get('/oauth2callback', async (req, res) => {
@@ -19,14 +24,15 @@ app.get('/oauth2callback', async (req, res) => {
 
   try {
     // 🔁 Scambia il codice con i token
-    const { tokens } = await client.getToken(code);
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
 
     if (!tokens.id_token) {
       return res.status(401).json({ error: 'Token ID non ricevuto da Google' });
     }
 
     // ✅ Verifica l'id_token
-    const ticket = await client.verifyIdToken({
+    const ticket = await oauth2Client.verifyIdToken({
       idToken: tokens.id_token,
       audience: process.env.CLIENT_ID,
     });
@@ -39,12 +45,12 @@ app.get('/oauth2callback', async (req, res) => {
       email: payload.email,
       name: payload.name,
       picture: payload.picture,
-      idToken: tokens.id_token // opzionale: utile per salvarlo lato client
+      idToken: tokens.id_token
     });
 
   } catch (err) {
-    console.error('❌ Errore durante la verifica del codice OAuth2:', err);
-    res.status(500).json({ error: 'Errore interno durante la verifica del token' });
+    console.error('❌ Errore durante la verifica del codice OAuth2:', err.message);
+    res.status(500).json({ error: 'Verifica fallita. Il codice potrebbe essere scaduto, già usato o non valido.' });
   }
 });
 
