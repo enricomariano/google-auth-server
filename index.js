@@ -1,21 +1,11 @@
-const express = require('express');
-const cors = require('cors');
-const {OAuth2Client} = require('google-auth-library');
-require('dotenv').config();
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-const client = new OAuth2Client(process.env.CLIENT_ID);
-
 app.get('/oauth2callback', async (req, res) => {
-  const token = req.query.id_token;
-  if (!token) return res.status(400).json({ error: 'Token mancante' });
+  const code = req.query.code;
+  if (!code) return res.status(400).json({ error: 'Codice mancante' });
 
   try {
+    const { tokens } = await client.getToken(code);
     const ticket = await client.verifyIdToken({
-      idToken: token,
+      idToken: tokens.id_token,
       audience: process.env.CLIENT_ID,
     });
     const payload = ticket.getPayload();
@@ -26,9 +16,7 @@ app.get('/oauth2callback', async (req, res) => {
       picture: payload.picture,
     });
   } catch (err) {
-    console.error('❌ Errore verifica token:', err);
-    res.status(401).json({ error: 'Token non valido' });
+    console.error('❌ Errore verifica codice:', err);
+    res.status(401).json({ error: 'Codice non valido' });
   }
 });
-
-app.listen(3000, () => console.log('✅ Server avviato su http://localhost:3000'));
