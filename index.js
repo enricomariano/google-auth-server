@@ -91,6 +91,44 @@ app.post('/verify', async (req, res) => {
   }
 });
 
+app.post('/refresh', async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(400).json({ error: 'Refresh token mancante' });
+  }
+
+  try {
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    const { credentials } = await oauth2Client.refreshAccessToken();
+
+    if (!credentials.id_token) {
+      return res.status(401).json({ error: 'Impossibile ottenere nuovo idToken' });
+    }
+
+    const ticket = await oauth2Client.verifyIdToken({
+      idToken: credentials.id_token,
+      audience: process.env.CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    res.json({
+      userId: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture,
+      idToken: credentials.id_token,
+      accessToken: credentials.access_token
+    });
+
+    console.log(`🔁 Token aggiornato per: ${payload.email}`);
+  } catch (err) {
+    console.error('❌ Errore refresh token:', err.message);
+    res.status(500).json({ error: 'Refresh fallito: ' + err.message });
+  }
+});
+
 // 🚀 Avvio server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
