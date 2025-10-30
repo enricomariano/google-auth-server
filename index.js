@@ -8,6 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const PORT = process.env.PORT || 3000;
+const mongoClient = new MongoClient(process.env.MONGO_URI);
+let db;
+
 // 🔐 Crea client OAuth2
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
@@ -27,7 +31,6 @@ app.get('/oauth2callback', async (req, res) => {
   console.log(`📥 Ricevuto codice: ${code}`);
 
   try {
-    // 🔁 Scambia il codice con i token
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
@@ -36,7 +39,6 @@ app.get('/oauth2callback', async (req, res) => {
       return res.status(401).json({ error: 'Token ID non ricevuto da Google' });
     }
 
-    // ✅ Verifica l'id_token
     const ticket = await oauth2Client.verifyIdToken({
       idToken: tokens.id_token,
       audience: process.env.CLIENT_ID,
@@ -44,7 +46,6 @@ app.get('/oauth2callback', async (req, res) => {
 
     const payload = ticket.getPayload();
 
-    // 📦 Rispondi con i dati utente
     res.json({
       userId: payload.sub,
       email: payload.email,
@@ -64,9 +65,7 @@ app.get('/oauth2callback', async (req, res) => {
   }
 });
 
-
-
-// 🔍 Endpoint per verificare un idToken
+// 🔍 Verifica idToken
 app.post('/verify', async (req, res) => {
   const { idToken } = req.body;
 
@@ -95,6 +94,7 @@ app.post('/verify', async (req, res) => {
   }
 });
 
+// 🔁 Refresh token
 app.post('/refresh', async (req, res) => {
   const { refreshToken } = req.body;
 
@@ -134,7 +134,10 @@ app.post('/refresh', async (req, res) => {
   }
 });
 
+// ☁️ Sync utente su MongoDB
 app.post('/user/update', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database non disponibile' });
+
   const { userId, email, name, picture } = req.body;
   await db.collection('users').updateOne(
     { userId },
@@ -144,18 +147,17 @@ app.post('/user/update', async (req, res) => {
   res.json({ status: 'ok' });
 });
 
-
+// 🚀 Connessione MongoDB e avvio server
 mongoClient.connect()
   .then(client => {
     db = client.db(process.env.DB_NAME || 'netboard');
     console.log('✅ Connessione a MongoDB riuscita');
 
-    // 🚀 Avvia il server solo dopo la connessione
     app.listen(PORT, () => {
       console.log(`✅ Server avviato su http://localhost:${PORT}`);
     });
   })
   .catch(err => {
     console.error('❌ Errore connessione MongoDB:', err.message);
-    process.exit(1); // ❌ Ferma il server se il DB non è disponibile
+    process.exit(1);
   });
