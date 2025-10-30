@@ -20,16 +20,16 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-// 🌐 Endpoint per gestire il redirect da Google OAuth2
 app.get('/oauth2callback', async (req, res) => {
   const code = req.query.code;
+  const redirect = req.query.redirect || '/dashboard'; // opzionale
 
   if (!code) {
     console.warn('⚠️ Codice mancante nella query string');
     return res.status(400).json({ error: 'Codice mancante nella query string' });
   }
 
-  console.log(`📥 Ricevuto codice: ${code}`);
+  console.log(`📥 Ricevuto codice Google: ${code}`);
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
@@ -47,7 +47,6 @@ app.get('/oauth2callback', async (req, res) => {
 
     const payload = ticket.getPayload();
 
-    // ✅ Salva o aggiorna utente su MongoDB
     if (!db) {
       console.error('❌ Database non disponibile');
       return res.status(503).json({ error: 'Database non disponibile' });
@@ -70,16 +69,16 @@ app.get('/oauth2callback', async (req, res) => {
       { upsert: true }
     );
 
-    console.log(`[LOGIN] ${payload.email} @ ${new Date().toISOString()}`);
+    console.log(`[LOGIN] ✅ ${payload.email} @ ${new Date().toISOString()}`);
 
-    res.json({
-      userId: payload.sub,
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture,
-      idToken: tokens.id_token,
-      refreshToken: tokens.refresh_token || null
-    });
+    // 🔁 Redirect con token nel client
+    res.send(`
+      <script>
+        localStorage.setItem('idToken', '${tokens.id_token}');
+        localStorage.setItem('userId', '${payload.sub}');
+        window.location.href = '${redirect}';
+      </script>
+    `);
 
   } catch (err) {
     const message = err.response?.data?.error_description || err.message;
@@ -89,21 +88,20 @@ app.get('/oauth2callback', async (req, res) => {
 });
 
 
-app.get('/user/:id', async (req, res) => {
-  if (!db) return res.status(503).json({ error: 'DB non disponibile' });
-
-  const user = await db.collection('users').findOne({ userId: req.params.id });
-  if (!user) return res.status(404).json({ error: 'Utente non trovato' });
-
-  res.json(user);
-});
-
 
 app.get('/strava/callback', async (req, res) => {
   const code = req.query.code;
-  const userId = req.query.state; // opzionale
+  const userId = req.query.state; // opzionale, ma utile per associare l'utente
 
-  if (!code) return res.status(400).json({ error: 'Codice Strava mancante' });
+  if (!code) {
+    console.warn('⚠️ Codice Strava mancante nella query');
+    return res.status(400).json({ error: 'Codice Strava mancante' });
+  }
+
+  if (!userId) {
+    console.warn('⚠️ userId mancante nel parametro state');
+    return res.status(400).json({ error: 'userId mancante nel parametro state' });
+  }
 
   try {
     const response = await axios.post('https://www.strava.com/oauth/token', {
@@ -121,17 +119,22 @@ app.get('/strava/callback', async (req, res) => {
         $set: {
           stravaToken: access_token,
           stravaRefresh: refresh_token,
-          stravaId: athlete.id
+          stravaId: athlete.id,
+          stravaLinkedAt: new Date()
         }
-      }
+      },
+      { upsert: true }
     );
 
-    console.log(`[STRAVA] Collegato ${athlete.firstname} ${athlete.lastname} (${athlete.id})`);
-    res.redirect('/dashboard'); // o dove vuoi portare l’utente
+    console.log(`[STRAVA] ✅ ${athlete.firstname} ${athlete.lastname} (${athlete.id}) collegato per userId ${userId} @ ${new Date().toISOString()}`);
+
+    // Redirect finale (puoi personalizzarlo)
+    res.redirect(`/dashboard?userId=${userId}`);
 
   } catch (err) {
-    console.error('❌ Errore Strava:', err.message);
-    res.status(500).json({ error: 'Errore durante il collegamento Strava' });
+    const message = err.response?.data?.message || err.message;
+    console.error('❌ Errore durante il collegamento Strava:', message);
+    res.status(500).json({ error: `Errore Strava: ${message}` });
   }
 });
 
