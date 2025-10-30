@@ -11,7 +11,7 @@ app.use(express.json());
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
   process.env.CLIENT_SECRET,
-  process.env.REDIRECT_URI // ← definito nel .env
+  process.env.REDIRECT_URI
 );
 
 // 🌐 Endpoint per gestire il redirect da Google OAuth2
@@ -49,7 +49,8 @@ app.get('/oauth2callback', async (req, res) => {
       email: payload.email,
       name: payload.name,
       picture: payload.picture,
-      idToken: tokens.id_token
+      idToken: tokens.id_token,
+      refreshToken: tokens.refresh_token || null
     });
 
     console.log(`✅ Login riuscito per: ${payload.email}`);
@@ -61,9 +62,37 @@ app.get('/oauth2callback', async (req, res) => {
   }
 });
 
+// 🔍 Endpoint per verificare un idToken
+app.post('/verify', async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({ error: 'Token mancante' });
+  }
+
+  try {
+    const ticket = await oauth2Client.verifyIdToken({
+      idToken,
+      audience: process.env.CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    res.json({
+      valid: true,
+      userId: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture
+    });
+
+  } catch (err) {
+    console.error('❌ Verifica token fallita:', err.message);
+    res.status(401).json({ valid: false, error: 'Token non valido o scaduto' });
+  }
+});
+
 // 🚀 Avvio server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server avviato su http://localhost:${PORT}`);
 });
-
