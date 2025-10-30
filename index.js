@@ -7,11 +7,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 Crea client OAuth2 con client_id, client_secret e redirect_uri
+// 🔐 Crea client OAuth2
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
   process.env.CLIENT_SECRET,
-  'https://google-auth-server-obi8.onrender.com/oauth2callback'
+  process.env.REDIRECT_URI // ← definito nel .env
 );
 
 // 🌐 Endpoint per gestire il redirect da Google OAuth2
@@ -66,3 +66,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server avviato su http://localhost:${PORT}`);
 });
+
