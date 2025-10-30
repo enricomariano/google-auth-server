@@ -46,6 +46,31 @@ app.get('/oauth2callback', async (req, res) => {
 
     const payload = ticket.getPayload();
 
+    // ✅ Salva o aggiorna utente su MongoDB
+    if (!db) {
+      console.error('❌ Database non disponibile');
+      return res.status(503).json({ error: 'Database non disponibile' });
+    }
+
+    await db.collection('users').updateOne(
+      { userId: payload.sub },
+      {
+        $set: {
+          email: payload.email,
+          name: payload.name,
+          picture: payload.picture,
+          lastLogin: new Date()
+        },
+        $setOnInsert: {
+          badges: [],
+          stravaToken: null
+        }
+      },
+      { upsert: true }
+    );
+
+    console.log(`[LOGIN] ${payload.email} @ ${new Date().toISOString()}`);
+
     res.json({
       userId: payload.sub,
       email: payload.email,
@@ -55,15 +80,23 @@ app.get('/oauth2callback', async (req, res) => {
       refreshToken: tokens.refresh_token || null
     });
 
-    console.log(`[LOGIN] ${payload.email} @ ${new Date().toISOString()}`);
-    console.log(`✅ Login riuscito per: ${payload.email}`);
-
   } catch (err) {
     const message = err.response?.data?.error_description || err.message;
     console.error('❌ Errore durante la verifica del codice OAuth2:', message);
     res.status(500).json({ error: `Verifica fallita: ${message}` });
   }
 });
+
+
+app.get('/user/:id', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'DB non disponibile' });
+
+  const user = await db.collection('users').findOne({ userId: req.params.id });
+  if (!user) return res.status(404).json({ error: 'Utente non trovato' });
+
+  res.json(user);
+});
+
 
 // 🔍 Verifica idToken
 app.post('/verify', async (req, res) => {
