@@ -53,6 +53,7 @@ app.get('/oauth2callback', async (req, res) => {
       refreshToken: tokens.refresh_token || null
     });
 
+    console.log(`[LOGIN] ${payload.email} @ ${new Date().toISOString()}`);
     console.log(`✅ Login riuscito per: ${payload.email}`);
 
   } catch (err) {
@@ -124,6 +125,7 @@ app.post('/refresh', async (req, res) => {
       accessToken: credentials.access_token
     });
 
+    console.log(`[REFRESH] ${payload.email} @ ${new Date().toISOString()}`);
     console.log(`🔁 Token aggiornato per: ${payload.email}`);
   } catch (err) {
     console.error('❌ Errore refresh token:', err.message);
@@ -142,22 +144,17 @@ app.post('/user/update', async (req, res) => {
 });
 
 
-// 🚀 Avvio server
-const PORT = process.env.PORT || 3000;
-const { MongoClient } = require('mongodb');
-
-const mongoClient = new MongoClient(process.env.MONGO_URI);
-let db;
-
 mongoClient.connect()
   .then(client => {
     db = client.db(process.env.DB_NAME || 'netboard');
     console.log('✅ Connessione a MongoDB riuscita');
+
+    // 🚀 Avvia il server solo dopo la connessione
+    app.listen(PORT, () => {
+      console.log(`✅ Server avviato su http://localhost:${PORT}`);
+    });
   })
   .catch(err => {
     console.error('❌ Errore connessione MongoDB:', err.message);
+    process.exit(1); // ❌ Ferma il server se il DB non è disponibile
   });
-
-app.listen(PORT, () => {
-  console.log(`✅ Server avviato su http://localhost:${PORT}`);
-});
