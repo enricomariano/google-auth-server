@@ -129,6 +129,17 @@ app.post('/refresh', async (req, res) => {
   }
 });
 
+app.post('/user/update', async (req, res) => {
+  const { userId, email, name, picture } = req.body;
+  await db.collection('users').updateOne(
+    { userId },
+    { $set: { email, name, picture, lastLogin: new Date() } },
+    { upsert: true }
+  );
+  res.json({ status: 'ok' });
+});
+
+
 // 🚀 Avvio server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
