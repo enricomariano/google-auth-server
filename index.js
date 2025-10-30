@@ -11,7 +11,7 @@ app.use(express.json());
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
   process.env.CLIENT_SECRET,
-  'https://google-auth-server-obi8.onrender.com/oauth2callback' // ← deve combaciare con Google Console
+  'https://google-auth-server-obi8.onrender.com/oauth2callback'
 );
 
 // 🌐 Endpoint per gestire il redirect da Google OAuth2
@@ -19,8 +19,11 @@ app.get('/oauth2callback', async (req, res) => {
   const code = req.query.code;
 
   if (!code) {
+    console.warn('⚠️ Codice mancante nella query string');
     return res.status(400).json({ error: 'Codice mancante nella query string' });
   }
+
+  console.log(`📥 Ricevuto codice: ${code}`);
 
   try {
     // 🔁 Scambia il codice con i token
@@ -28,6 +31,7 @@ app.get('/oauth2callback', async (req, res) => {
     oauth2Client.setCredentials(tokens);
 
     if (!tokens.id_token) {
+      console.warn('⚠️ Token ID non ricevuto da Google');
       return res.status(401).json({ error: 'Token ID non ricevuto da Google' });
     }
 
@@ -48,9 +52,12 @@ app.get('/oauth2callback', async (req, res) => {
       idToken: tokens.id_token
     });
 
+    console.log(`✅ Login riuscito per: ${payload.email}`);
+
   } catch (err) {
-    console.error('❌ Errore durante la verifica del codice OAuth2:', err.message);
-    res.status(500).json({ error: 'Verifica fallita. Il codice potrebbe essere scaduto, già usato o non valido.' });
+    const message = err.response?.data?.error_description || err.message;
+    console.error('❌ Errore durante la verifica del codice OAuth2:', message);
+    res.status(500).json({ error: `Verifica fallita: ${message}` });
   }
 });
 
