@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { google } = require('googleapis');
 const { MongoClient } = require('mongodb');
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -95,6 +96,43 @@ app.get('/user/:id', async (req, res) => {
   if (!user) return res.status(404).json({ error: 'Utente non trovato' });
 
   res.json(user);
+});
+
+
+app.get('/strava/callback', async (req, res) => {
+  const code = req.query.code;
+  const userId = req.query.state; // opzionale
+
+  if (!code) return res.status(400).json({ error: 'Codice Strava mancante' });
+
+  try {
+    const response = await axios.post('https://www.strava.com/oauth/token', {
+      client_id: process.env.STRAVA_CLIENT_ID,
+      client_secret: process.env.STRAVA_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code'
+    });
+
+    const { access_token, refresh_token, athlete } = response.data;
+
+    await db.collection('users').updateOne(
+      { userId },
+      {
+        $set: {
+          stravaToken: access_token,
+          stravaRefresh: refresh_token,
+          stravaId: athlete.id
+        }
+      }
+    );
+
+    console.log(`[STRAVA] Collegato ${athlete.firstname} ${athlete.lastname} (${athlete.id})`);
+    res.redirect('/dashboard'); // o dove vuoi portare l’utente
+
+  } catch (err) {
+    console.error('❌ Errore Strava:', err.message);
+    res.status(500).json({ error: 'Errore durante il collegamento Strava' });
+  }
 });
 
 
