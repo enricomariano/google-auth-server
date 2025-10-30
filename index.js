@@ -134,6 +134,19 @@ app.post('/refresh', async (req, res) => {
   }
 });
 
+app.get('/ping-db', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database non disponibile' });
+
+  try {
+    const count = await db.collection('users').countDocuments();
+    res.json({ status: 'ok', utenti: count });
+  } catch (err) {
+    console.error('❌ Errore ping-db:', err.message);
+    res.status(500).json({ error: 'Errore durante il ping al database' });
+  }
+});
+
+
 // ☁️ Sync utente su MongoDB
 app.post('/user/update', async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database non disponibile' });
