@@ -62,6 +62,8 @@ app.get('/oauth2callback', async (req, res) => {
   }
 });
 
+
+
 // 🔍 Endpoint per verificare un idToken
 app.post('/verify', async (req, res) => {
   const { idToken } = req.body;
@@ -142,6 +144,20 @@ app.post('/user/update', async (req, res) => {
 
 // 🚀 Avvio server
 const PORT = process.env.PORT || 3000;
+const { MongoClient } = require('mongodb');
+
+const mongoClient = new MongoClient(process.env.MONGO_URI);
+let db;
+
+mongoClient.connect()
+  .then(client => {
+    db = client.db(process.env.DB_NAME || 'netboard');
+    console.log('✅ Connessione a MongoDB riuscita');
+  })
+  .catch(err => {
+    console.error('❌ Errore connessione MongoDB:', err.message);
+  });
+
 app.listen(PORT, () => {
   console.log(`✅ Server avviato su http://localhost:${PORT}`);
 });
